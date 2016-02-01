@@ -47,14 +47,15 @@ util.inherits(Wireless, EventEmitter);
 
 Wireless.prototype.COMMANDS = {
     scan: 'sudo iwlist :INTERFACE scan',
+    fast_scan:  'sudo wpa_cli scan && sudo wpa_cli scan_results',
     stat: 'sudo iwconfig :INTERFACE',
+    status: "sudo wpa_cli status",
     disable: 'sudo ifconfig :INTERFACE down',
     enable: 'sudo ifconfig :INTERFACE up',
     interfaces: 'sudo iwconfig',
     dhcp: 'sudo dhcpcd :INTERFACE',
     dhcp_disable: 'sudo dhcpcd :INTERFACE -k',
     leave: 'sudo iwconfig :INTERFACE essid ""',
-
     metric: 'sudo ifconfig :INTERFACE metric :METRIC',
     connect_wep: 'sudo iwconfig :INTERFACE essid ":ESSID" key :PASSWORD',
     connect_wpa: "sudo wpa_passphrase ':ESSID' ':PASSWORD' > wpa-temp.conf && sudo wpa_supplicant -D wext -i :INTERFACE -c wpa-temp.conf && rm wpa-temp.conf",
@@ -206,6 +207,65 @@ Wireless.prototype.enable = function(callback) {
         callback && callback(null);
     });
 };
+
+
+
+
+// Scan networks
+Wireless.prototype.fastScan = function(callback){
+    var self = this;
+
+    this.emit('command', this.commands.fast_scan);
+
+    exec(this.commands.fast_scan, function(err, stdout, stderr) {
+        if (err) {
+            self.emit('error', "There was an  error scanning  network" + err);
+            callback && callback(err);
+            return;
+        }
+
+        callback && callback(_parseScanResults(stdout));    
+    });
+};
+
+
+
+function _parseScanResults(networks){
+  var arrayNetworks = new Array();
+  if (networks.trim() != "") {
+    var networksList = networks.split("\n");
+    var parameters;
+
+    //Remove headers
+    networksList.splice(0, 2);
+    //Remove footer
+    networksList.splice(networksList.length - 1, 1);
+
+    for (var networkIndex in networksList) {
+      var tempNetworkJson = {};
+      parameters = networksList[networkIndex].split("\t");
+      
+      //not add hidden networks (hidden networks has only 4 parameters)
+      if (parameters.length == 5 && parameters[4] != ""){
+        tempNetworkJson = {
+          bssid: parameters[0],
+          frecuency: parameters[1],
+          signal_level: parameters[2],
+          flags: parameters[3],
+          ssid: parameters[4]
+        }
+        arrayNetworks.push(tempNetworkJson);
+      }
+
+     if (networkIndex >= networksList.length - 1) {
+        return arrayNetworks;
+     }
+
+      }
+    } else {
+      return arrayNetworks;
+    }
+}
 
 // Disables the interface (ifconfig DOWN)
 Wireless.prototype.disable = function(callback) {
