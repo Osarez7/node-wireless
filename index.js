@@ -50,8 +50,12 @@ Wireless.prototype.COMMANDS = {
     fast_scan:  'sudo wpa_cli scan && sudo wpa_cli scan_results',
     stat: 'sudo iwconfig :INTERFACE',
     status: "sudo wpa_cli status",
+    list_networks: "sudo wpa_cli list",
+    list_interfaces: "sudo wpa_cli interface_list",
+    forget_network: "sudo wpa_cli remove_network :NETWORK_ID",
     disable: 'sudo ifconfig :INTERFACE down',
     enable: 'sudo ifconfig :INTERFACE up',
+    save_configuration: "sudo wpa_cli save",
     interfaces: 'sudo iwconfig',
     dhcp: 'sudo dhcpcd :INTERFACE',
     dhcp_disable: 'sudo dhcpcd :INTERFACE -k',
@@ -71,6 +75,9 @@ Wireless.prototype._translate = function(string, data) {
 
     return string;
 };
+
+
+
 
 // Start listening, runs in a loop
 Wireless.prototype.start = function() {
@@ -266,6 +273,67 @@ function _parseScanResults(networks){
       return arrayNetworks;
     }
 }
+
+
+
+
+//known networks
+Wireless.prototype.listKnownNetworks = function (callback) {
+
+    exec(this.commands.list_networks, function (err, stdout, stderr) {
+      callback(_parseKnownNetworks(stdout));
+    });
+  }
+
+
+
+ function _parseKnownNetworks(networks) {
+    var networksList = networks.split("\n");
+    var arrayNetworks = new Array();
+    var tempNetworkJson;
+    var parameters;
+  
+    //Remove headers
+    networksList.splice(0, 2);
+    //Remove footer
+    networksList.splice(networksList.length - 1, 1);
+
+    for (var networkIndex in networksList) {
+      tempNetworkJson = {};
+
+      parameters = networksList[networkIndex].split("\t");
+
+      tempNetworkJson = {
+        network_id: parameters[0],
+        ssid: parameters[1],
+        bssid: parameters[2],
+        flags: parameters[3],
+      };
+      arrayNetworks.push(tempNetworkJson);
+    }
+    return arrayNetworks;
+  }
+
+
+
+//forget a network by id
+Wireless.prototype.forgetNetwork = function (networkId, callback) {
+    var self = this;
+    exec(this._translate(this.commands.remove_network, { network_id: networkId }), function (err, stdout, stderr) {
+      if (stdout.indexOf("OK") >= 0) {
+        self.saveConfiguration();
+        callback(stdout);
+      } else {
+        callback(stdout);
+      }
+    });
+  }
+
+//save wpa_supplicant configuration
+Wireless.prototype.saveConfiguration = function () {
+ exec(this.commands.save_configuration, function(){});
+}
+
 
 // Disables the interface (ifconfig DOWN)
 Wireless.prototype.disable = function(callback) {
